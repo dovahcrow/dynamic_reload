@@ -23,6 +23,7 @@ extern crate notify;
 extern crate tempdir;
 
 use libloading::Library;
+use notify::DebouncedEvent;
 use notify::{RecommendedWatcher, Watcher};
 use std::env;
 use std::fs;
@@ -220,11 +221,11 @@ impl<'a> DynamicReload {
     ///     let plugins = Plugins { ... };
     ///     let mut dr = DynamicReload::new(None, Some("target/debug"), Search::Backwards);
     ///     dr.add_library("test_shared", Search::Backwards);
-    ///     dr.update(Plugin::reload_callback, &mut plugins);
+    ///     unsafe { dr.update(Plugin::reload_callback, &mut plugins, None) };
     /// }
     /// ```
     ///
-    pub unsafe fn update<F, T>(&mut self, ref update_call: F, data: &mut T)
+    pub unsafe fn update<F, T>(&mut self, update_call: F, data: &mut T)
     where
         F: Fn(&mut T, UpdateState, Option<&Arc<Lib>>),
     {
@@ -238,7 +239,37 @@ impl<'a> DynamicReload {
         }
 
         if let Some(path) = maybe_path {
-            Self::reload_libs(self, &path, update_call, data);
+            Self::reload_libs(self, &path, &update_call, data);
+        }
+    }
+
+    pub unsafe fn update_with_filter<F, T, S>(&mut self, update_call: F, data: &mut T, filter: S)
+    where
+        F: Fn(&mut T, UpdateState, Option<&Arc<Lib>>),
+        S: Fn(&DebouncedEvent) -> bool,
+    {
+        use DebouncedEvent::*;
+
+        let mut maybe_path = None;
+        while let Ok(evt) = self.watch_recv.try_recv() {
+            match evt {
+                NoticeWrite(path)
+                | Write(path)
+                | Create(path)
+                | NoticeRemove(path)
+                | Chmod(path)
+                | Remove(path)
+                | Rename(_, path)
+                    if filter(&evt) =>
+                {
+                    maybe_path = Some(path)
+                }
+                _ => (),
+            }
+        }
+
+        if let Some(path) = maybe_path {
+            Self::reload_libs(self, &path, &update_call, data);
         }
     }
 
