@@ -228,14 +228,17 @@ impl<'a> DynamicReload {
     where
         F: Fn(&mut T, UpdateState, Option<&Arc<Lib>>),
     {
+        let mut maybe_path = None;
         while let Ok(evt) = self.watch_recv.try_recv() {
             use notify::DebouncedEvent::*;
             match evt {
-                NoticeWrite(ref path) | Write(ref path) | Create(ref path) => {
-                    Self::reload_libs(self, path, update_call, data);
-                }
+                NoticeWrite(path) | Write(path) | Create(path) => maybe_path = Some(path),
                 _ => (),
             }
+        }
+
+        if let Some(path) = maybe_path {
+            Self::reload_libs(self, &path, update_call, data);
         }
     }
 
