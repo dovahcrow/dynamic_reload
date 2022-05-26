@@ -54,7 +54,7 @@ pub struct Lib {
 
 /// Contains information about loaded libraries and also tracks search paths and reloading events.
 pub struct DynamicReload {
-    libs: Vec<Arc<Lib>>,
+    pub libs: Vec<Arc<Lib>>,
     watcher: Option<RecommendedWatcher>,
     shadow_dir: Option<TempDir>,
     search_paths: Vec<PathBuf>,
